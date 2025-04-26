@@ -1,0 +1,81 @@
+version: "2"
+services:
+
+  php:
+    build:
+      context: ./srv/static
+    ports:
+      - "80:80"
+    volumes:
+      - ./srv/static/src:/var/www/html
+
+  ci3:
+    build:
+      context: ./srv/ci
+    ports:
+      - "81:80"
+    volumes:
+      - ./srv/ci/src:/var/www/html
+
+  ci-api:
+    build:
+      context: ./srv/ci-api
+    ports:
+      - "82:80"
+    env_file:
+      - ${ENV_FILE}
+    volumes:
+      - ./srv/ci-api:/var/www/html
+      - ./srv/ci-api/nginx.conf:/etc/nginx/conf.d/default.conf
+    networks:
+      - internal
+    depends_on:
+      - db
+      - redis
+  
+  go:
+    build:
+      context: ./srv/go
+    ports:
+      - "8080:8080"
+    env_file:
+      - ${ENV_FILE}
+    volumes:
+      - ./srv/go:/go
+      - ./share:/share
+    networks:
+      - internal
+    depends_on:
+      - db
+      - redis
+
+  db:
+    image: mysql:5.7
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PWD}
+    networks:
+      - internal
+
+  redis:
+    image: redis:latest
+    command: redis-server --appendonly yes
+    volumes:
+      - ./redis-data:/data
+    networks:
+      - internal
+    ports:
+      - "6378:6379"
+
+  # Used for redis-cli
+  rcli:
+    image: redis:latest
+    links:
+      - redis
+    command: >
+      sh -c 'redis-cli -h redis '
+    networks:
+      - internal
+
+networks:
+  internal:
+    driver: bridge

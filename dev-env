@@ -1,0 +1,77 @@
+#!/bin/bash
+export ENV_FILE=local_env
+export COMPOSE_FILE=docker-compose.yml
+
+eval $(cat $ENV_FILE | sed '/^#/ d' | sed '/^\s*$/d'| sed 's/^/export /')
+
+HELP_TEXT="""
+Help:	./dev-env [-h | help --help]
+
+Usage:
+
+	./dev-env [COMMAND] [SERVICE] [OPTIONS]  # run a specific command
+	./dev-env srv [SERVICE] [COMMAND]  # run commands of single service
+	./dev-env srv exec [SERVICE] [COMMAND]  # execute commands of single service, in a running container
+
+Continuous Integration:
+
+	./dev-env ci [COMMAND]  # run ci specific commands
+	./dev-env ci [SERVICE] [COMMAND]  # run ci commands of single service
+
+You can start individual containers by running
+
+	./dev-env up [..containers]
+
+Eg: ./dev-env up ci go
+
+Also:
+
+	./dev-env init  # initialize all containers
+	./dev-env srv [SERVICE] init  # run init for a single service
+	./dev-env [up] [SERVICES] # bring up all services, or bring up some service(s)
+	./dev-env build [SERVICES]  # build all services, or some service(s)
+	./dev-env restart [SERVICES]  # restart all services, or some service(s)
+	./dev-env stop [SERVICES]  # stop all services
+	./dev-env down [SERVICES]  # down all services, or down some service(s)
+
+	./dev-env run [SERVICE] [COMMAND]  # run a command in a single service
+	./dev-env exec [SERVICE] [COMMAND]  # exec against a single service
+
+	./dev-env migrate [SERVICE] [up/down]  # migrate a service
+	
+	...
+"""
+
+if [[ "$1" == "help" || "$1" == "-h" || "$1" == "--help" ]]; then
+	echo "$HELP_TEXT"
+elif [[ "$1" == "init" ]];then
+	printf "Running db_setup \n\n"
+	docker-compose -f $COMPOSE_FILE run ci-api init
+
+	echo """Done !!!
+
+	Now you can start containers by running ./dev-env which starts all containers by default
+
+	"""
+	echo "$HELP_TEXT"
+elif [[ "$1" == "migrate" ]]; then  # TODO: migrate could act the same as all other run/exec commands
+	docker-compose -f $COMPOSE_FILE run --rm ${2} ${1} ${*:3}
+elif [[ "$1" == "run" ]]; then
+	docker-compose -f $COMPOSE_FILE "$1" ${*:2}
+elif [[ -z "$1" ]]; then
+	echo "Starting Applications..."
+	docker-compose -f $COMPOSE_FILE up
+elif [[ "$1" == "srv" ]]; then
+	if [[ "$3" == "exec" ]]; then
+		echo "Executing container service command ${*:4}..."
+		docker-compose -f $COMPOSE_FILE $3 $2 /bin/bash ./start.sh ${*:4}
+	else
+		echo "Running container service command ${*:2}..."
+		docker-compose -f $COMPOSE_FILE run --rm ${*:2}
+	fi
+else
+	echo "${1}-ing ${*:2}..."
+	echo "${*}"
+	docker-compose -f $COMPOSE_FILE --env-file $ENV_FILE ${*}
+fi
+
